@@ -1,0 +1,191 @@
+{
+  "steam": {
+    "1091500": {
+      "id": "cyberpunk-2077",
+      "title": "Cyberpunk 2077",
+      "hook": "version.dll",
+      "input": "DLSS",
+      "fg": [
+        "dlssg"
+      ],
+      "notes": "Use the real bin/x64 executable; preserve existing proxies.",
+      "ini_overrides": {}
+    }
+  },
+  "exe": {
+    "spider-man2.exe": {
+      "id": "spider-man-2",
+      "title": "Marvel's Spider-Man 2",
+      "aliases": [
+        "Spider-Man2",
+        "Spider Man 2"
+      ],
+      "page": "Marvels-Spider%E2%80%90Man-2",
+      "hook": "dxgi.dll",
+      "input": "FSR",
+      "fg": [
+        "fsrfg",
+        "dlssg"
+      ],
+      "no_spoof": true,
+      "native_xess": true,
+      "notes": "Intel/AMD: ray tracing with DXGI spoofing can crash at startup. Use FSR/XeSS in game. Enable the matching native FG option; DLSSG must be enabled to provide HUD-less frames.",
+      "ini_overrides": {}
+    },
+    "spider man 2.exe": {
+      "id": "spider-man-2",
+      "title": "Marvel's Spider-Man 2",
+      "aliases": [
+        "Spider-Man2",
+        "Spider Man 2"
+      ],
+      "page": "Marvels-Spider%E2%80%90Man-2",
+      "hook": "dxgi.dll",
+      "input": "FSR",
+      "fg": [
+        "fsrfg",
+        "dlssg"
+      ],
+      "no_spoof": true,
+      "native_xess": true,
+      "notes": "Intel/AMD: ray tracing with DXGI spoofing can crash at startup. Use FSR/XeSS in game. Enable the matching native FG option; DLSSG must be enabled to provide HUD-less frames.",
+      "ini_overrides": {}
+    },
+    "spider-man remastered.exe": {
+      "id": "spider-man-remastered",
+      "title": "Marvel's Spider-Man Remastered",
+      "aliases": [
+        "Spider-Man Remastered",
+        "Spider-Man"
+      ],
+      "page": "Marvels-Spider%E2%80%90Man-Remastered",
+      "hook": "dxgi.dll",
+      "input": "FSR",
+      "fg": [
+        "fsrfg",
+        "dlssg"
+      ],
+      "no_spoof": true,
+      "native_xess": true,
+      "notes": "Keep DXGI spoofing off to avoid the Intel/AMD ray-tracing startup crash. DLSSG on Intel/AMD requires -forceReflexMarkers in launcher options; FSR 3.1 FG avoids that requirement.",
+      "ini_overrides": {}
+    },
+    "spider-man.exe": {
+      "id": "spider-man-remastered",
+      "title": "Marvel's Spider-Man Remastered",
+      "aliases": [
+        "Spider-Man Remastered",
+        "Spider-Man"
+      ],
+      "page": "Marvels-Spider%E2%80%90Man-Remastered",
+      "hook": "dxgi.dll",
+      "input": "FSR",
+      "fg": [
+        "fsrfg",
+        "dlssg"
+      ],
+      "no_spoof": true,
+      "native_xess": true,
+      "notes": "Keep DXGI spoofing off to avoid the Intel/AMD ray-tracing startup crash. DLSSG on Intel/AMD requires -forceReflexMarkers in launcher options; FSR 3.1 FG avoids that requirement.",
+      "ini_overrides": {}
+    },
+    "milesmorales.exe": {
+      "id": "spider-man-miles-morales",
+      "title": "Marvel's Spider-Man: Miles Morales",
+      "aliases": [
+        "MilesMorales",
+        "Spider Man Miles Morales"
+      ],
+      "page": "Marvels-Spider%E2%80%90Man-Miles-Morales",
+      "hook": "dxgi.dll",
+      "input": "FSR",
+      "fg": [
+        "fsrfg",
+        "dlssg"
+      ],
+      "no_spoof": true,
+      "native_xess": true,
+      "notes": "Keep DXGI spoofing off to avoid the Intel/AMD ray-tracing startup crash. DLSSG on Intel/AMD requires -forceReflexMarkers in launcher options; FSR 3.1 FG avoids that requirement.",
+      "ini_overrides": {}
+    },
+    "spider man miles morales.exe": {
+      "id": "spider-man-miles-morales",
+      "title": "Marvel's Spider-Man: Miles Morales",
+      "aliases": [
+        "MilesMorales",
+        "Spider Man Miles Morales"
+      ],
+      "page": "Marvels-Spider%E2%80%90Man-Miles-Morales",
+      "hook": "dxgi.dll",
+      "input": "FSR",
+      "fg": [
+        "fsrfg",
+        "dlssg"
+      ],
+      "no_spoof": true,
+      "native_xess": true,
+      "notes": "Keep DXGI spoofing off to avoid the Intel/AMD ray-tracing startup crash. DLSSG on Intel/AMD requires -forceReflexMarkers in launcher options; FSR 3.1 FG avoids that requirement.",
+      "ini_overrides": {}
+    },
+    "midnightsuns.exe": {
+      "id": "midnight-suns",
+      "title": "Marvel's Midnight Suns",
+      "aliases": [
+        "MidnightSuns",
+        "Midnight Suns"
+      ],
+      "page": "Marvels-Midnight-Suns",
+      "hook": "d3d12.dll",
+      "input": "DLSS",
+      "fg": [],
+      "suffix": "MidnightSuns/Binaries/Win64",
+      "notes": "FSR2 input is unsupported. This is a Streamline 1 game; its documented Nukem FG route cannot output XeSS FG. Use d3d12.dll beside the Win64 game executable. The alternate dbghelp route needs separate engine-file changes and is not automated.",
+      "ini_overrides": {}
+    },
+    "midnight suns.exe": {
+      "id": "midnight-suns",
+      "title": "Marvel's Midnight Suns",
+      "aliases": [
+        "MidnightSuns",
+        "Midnight Suns"
+      ],
+      "page": "Marvels-Midnight-Suns",
+      "hook": "d3d12.dll",
+      "input": "DLSS",
+      "fg": [],
+      "suffix": "MidnightSuns/Binaries/Win64",
+      "notes": "FSR2 input is unsupported. This is a Streamline 1 game; its documented Nukem FG route cannot output XeSS FG. Use d3d12.dll beside the Win64 game executable. The alternate dbghelp route needs separate engine-file changes and is not automated.",
+      "ini_overrides": {}
+    },
+    "dcs.exe": {
+      "id": "dcs-world",
+      "title": "DCS World",
+      "aliases": [
+        "DCS",
+        "DCS World OpenBeta"
+      ],
+      "page": "DCS-World",
+      "hook": "dxgi.dll",
+      "input": "DLSS",
+      "fg": [],
+      "suffix": "bin",
+      "notes": "Install beside DCS.exe in bin, not bin-mt. No native FG route is documented. The reported FakeNvapi/FSR4 issue concerns FSR4 output, not a verified XeSS failure.",
+      "ini_overrides": {}
+    },
+    "dcs world openbeta.exe": {
+      "id": "dcs-world",
+      "title": "DCS World",
+      "aliases": [
+        "DCS",
+        "DCS World OpenBeta"
+      ],
+      "page": "DCS-World",
+      "hook": "dxgi.dll",
+      "input": "DLSS",
+      "fg": [],
+      "suffix": "bin",
+      "notes": "Install beside DCS.exe in bin, not bin-mt. No native FG route is documented. The reported FakeNvapi/FSR4 issue concerns FSR4 output, not a verified XeSS failure.",
+      "ini_overrides": {}
+    }
+  }
+}

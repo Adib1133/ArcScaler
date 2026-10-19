@@ -1,0 +1,6 @@
+.audit-deps/
+build/
+dist/
+github-repository/
+test_extract_py7zr/
+audit/pre-arcscaler-source.zip

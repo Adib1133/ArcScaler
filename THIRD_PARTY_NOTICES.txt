@@ -1,0 +1,14 @@
+ArcScaler application source is licensed under GNU General Public License
+version 2.0 only. See LICENSE.txt. ArcScaler-source.zip contains the application
+source and build scripts for this release.
+
+Third-party components remain under their respective original licenses;
+the ArcScaler license does not relicense their binaries or source.
+OptiScaler and the Intel XeSS, AMD FidelityFX, Microsoft DirectX and other
+runtime components retain the notices supplied in their runtime package.
+These notices are installed under Licenses/OptiScaler and are also preserved
+with the offline runtime package in the user's ArcScaler data directory.
+
+The application uses Python, Tcl/Tk, CustomTkinter, Pillow, psutil, darkdetect
+and packaging. Their upstream licenses apply. PyInstaller's bootloader is
+distributed with its exception for generated applications.
