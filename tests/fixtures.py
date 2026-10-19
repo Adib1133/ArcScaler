@@ -5,7 +5,7 @@ import struct
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def pe_bytes(dll=True, marker=b'fixture', imports=()):
+def pe_bytes(dll=True, marker=b'fixture', imports=(), exports=()):
     data = bytearray(1024)
     data[:2] = b'MZ'
     struct.pack_into('<I', data, 60, 128)
@@ -23,7 +23,24 @@ def pe_bytes(dll=True, marker=b'fixture', imports=()):
             pos=512+256+i*48
             struct.pack_into('<IIIII',data,512+64+i*20,0,0,0,4096+256+i*48,0)
             encoded=name.encode()+b'\0';data[pos:pos+len(encoded)]=encoded
+    if exports:
+        data.extend(bytes(4096))
+        struct.pack_into('<IIII', data, 400, len(data)-512, 4096, len(data)-512, 512)
+        rva = lambda pos: pos-512+4096
+        struct.pack_into('<II', data, 152+112, rva(1024), 40)
+        struct.pack_into('<IIIII', data, 1024+20, len(exports), len(exports), rva(1100), rva(1300), rva(1500))
+        pos=1700
+        for i,name in enumerate(sorted(exports)):
+            struct.pack_into('<I', data, 1100+i*4, rva(512))
+            struct.pack_into('<I', data, 1300+i*4, rva(pos))
+            struct.pack_into('<H', data, 1500+i*2, i)
+            encoded=name.encode()+b'\0';data[pos:pos+len(encoded)]=encoded;pos+=len(encoded)
     return bytes(data)
+
+
+def runtime_bytes(name='libxess.dll', marker=b'native runtime'):
+    from core.runtime_validation import REQUIRED_EXPORTS
+    return pe_bytes(marker=marker, exports=REQUIRED_EXPORTS[name])
 
 
 def package(root, tag='v0.9.4'):

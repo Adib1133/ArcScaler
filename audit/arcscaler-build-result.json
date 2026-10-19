@@ -1,7 +1,0 @@
-{
-  "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
-  "pyinstaller": "6.16.0",
-  "executable": "C:\\Users\\MG\\Desktop\\GUI astra last 5\\GUI astra last\\GUI astra\\dist\\ArcScaler.exe",
-  "sha256": "dce4ec46f8389e4e8cc3b8dbef00ee760d5cb311971cc4836083a50fde42d784",
-  "size": 182062356
-}

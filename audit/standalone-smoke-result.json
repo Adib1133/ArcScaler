@@ -1,9 +1,0 @@
-{
-  "exit_code": 0,
-  "elapsed_seconds": 20.69,
-  "standalone_no_sibling_assets": true,
-  "bundled_package_seeded": true,
-  "application_log": "2026-09-11 23:59:11,068 INFO OptiScaler Game Configurator initialized (Intel Arc Edition).\n2026-09-11 23:59:11,069 INFO Official Upstream: https://github.com/optiscaler/OptiScaler (v0.9.4+).\n2026-09-11 23:59:11,069 INFO Detected Hardware: Intel(R) HD Graphics 5500 (Driver: 20.19.15.4703)\n2026-09-11 23:59:11,069 INFO Display adapter: Intel(R) HD Graphics 5500 (DP4a Instructions).\n2026-09-11 23:59:11,069 INFO Install files, then verify backend activation in the game overlay.\n",
-  "stderr": "",
-  "seed_hash_matches": true
-}

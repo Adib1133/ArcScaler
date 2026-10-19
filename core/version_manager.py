@@ -1,5 +1,4 @@
 """Official release discovery and staged, validated package installation."""
-import gc
 import json
 import os
 from pathlib import Path
@@ -44,7 +43,7 @@ class VersionManager:
         nums = tuple(int(n) for n in re.findall(r'\d+', tag)[:3])
         return (nums + (0,) * (3 - len(nums)), not bool(re.search(r'alpha|beta|rc|nightly|preview', tag, re.I)), tag)
 
-    def resolve_package(self, tag, frame_gen=True, upscaler=True, fake_nvapi=True):
+    def resolve_package(self, tag, frame_gen=True, upscaler=True, fake_nvapi=True, exclude_prefixes=()):
         # XeFG requires FakeNvapi even when GPU identity spoofing is disabled.
         fake_nvapi = fake_nvapi or frame_gen
         root = self.version_path(tag)
@@ -65,9 +64,11 @@ class VersionManager:
             wanted = (upscaler and name.startswith('libxess') and 'fg' not in name
                       or frame_gen and name.startswith(('libxess_fg', 'libxessfg'))
                       or (frame_gen or fake_nvapi) and name.startswith(('libxell', 'fakenvapi')))
-            if wanted and path.suffix.lower() in ('.dll', '.ini'):
+            if wanted and not name.startswith(exclude_prefixes) and path.suffix.lower() in ('.dll', '.ini'):
                 files[path.name] = path
         for name in required:
+            if name.lower().startswith(exclude_prefixes):
+                continue
             path = safe_path(root, name)
             if not path.is_file():
                 raise ValueError(f'{tag}: required file missing: {name}')
@@ -80,8 +81,11 @@ class VersionManager:
         metadata = root / 'version_meta.json'
         if metadata.is_file():
             meta = json.loads(metadata.read_text(encoding='utf-8'))
+            selected_paths = {canonical(path) for path in files.values()}
             for name, expected in meta.get('file_hashes', {}).items():
                 path = safe_path(root, name)
+                if canonical(path) not in selected_paths:
+                    continue
                 if not path.is_file() or sha256(path) != expected:
                     raise ValueError(f'Installed package has changed: {name}. Re-download the release.')
         return files
@@ -104,8 +108,14 @@ class VersionManager:
             return {'installed': False, 'is_valid': False, 'files': {}, 'total_size_mb': 0, 'has_stubs': False}
 
     def get_installed_versions(self):
+        def has_core(tag):
+            try:
+                self.resolve_package(tag, False, False, False)
+                return True
+            except (OSError, ValueError, TypeError):
+                return False
         return sorted([p.name for p in Path(self.versions_dir).iterdir()
-                       if p.is_dir() and not p.name.startswith('.') and self.is_version_valid(p.name)],
+                       if p.is_dir() and not p.name.startswith('.') and has_core(p.name)],
                       key=self.sort_key, reverse=True)
 
     def delete_version(self, tag):
@@ -269,8 +279,6 @@ class VersionManager:
         try:
             shutil.rmtree(path)
         except OSError:
-            import gc, time
-            gc.collect()
             time.sleep(0.05)
             try:
                 shutil.rmtree(path, ignore_errors=True)
@@ -306,7 +314,6 @@ class VersionManager:
                     f'Archive extraction failed (exit {result.returncode}): '
                     f'{(result.stderr or result.stdout or "").strip()[:400]}'
                 )
-            gc.collect()
         for path in dest_dir.rglob('*'):
             safe_path(dest_dir, path.relative_to(dest_dir).as_posix())
         return True

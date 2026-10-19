@@ -34,6 +34,12 @@ with tempfile.TemporaryDirectory(prefix='ArcScaler standalone ') as tmp:
               'application_log': logs, 'stderr': result.stderr.decode('utf-8', errors='replace')}
     if report['bundled_package_seeded']:
         report['seed_hash_matches'] = sha256(user_data / 'assets/versions/v0.9.4/OptiScaler.dll') == sha256(ROOT / 'assets/versions/v0.9.4/OptiScaler.dll')
+        reference = ROOT / 'assets/versions/v0.9.4'
+        seeded = user_data / 'assets/versions/v0.9.4'
+        expected = {p.relative_to(reference).as_posix(): sha256(p) for p in reference.rglob('*') if p.is_file()}
+        actual = {p.relative_to(seeded).as_posix(): sha256(p) for p in seeded.rglob('*') if p.is_file()}
+        report['all_bundled_files_match'] = expected == actual
+        report['verified_file_count'] = len(expected)
     (ROOT / 'audit/arcscaler-smoke-result.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps(report, indent=2))
-    assert result.returncode == 0 and report.get('seed_hash_matches') and 'Unhandled error' not in logs, report
+    assert result.returncode == 0 and report.get('all_bundled_files_match') and 'Unhandled error' not in logs, report

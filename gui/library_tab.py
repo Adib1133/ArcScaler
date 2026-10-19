@@ -89,7 +89,7 @@ class LibraryTab(ctk.CTkFrame):
         row=self.rows.get(profile['id'])
         def animate(step=0):
             if generation!=self.selection_generation or row is None or not row.winfo_exists():return
-            start=(16,24,34);end=(38,60,83)
+            start=(16,18,22);end=(39,45,54)
             color='#'+''.join(f'{round(a+(b-a)*step/8):02x}' for a,b in zip(start,end))
             row.configure(fg_color=color)
             if step<8:self.after(16,lambda:animate(step+1))

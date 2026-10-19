@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 from core.hardware import HardwareDetector
 from core.install_plan import build_plan
+from core.version_manager import VersionManager
 from tests.fixtures import game, package
 
 
@@ -41,16 +42,18 @@ class HardwareTests(unittest.TestCase):
 
     def test_manual_mode_preserves_user_upscaler_intent_with_native_xess(self):
         with tempfile.TemporaryDirectory() as td:
+            fixture = package(Path(td) / 'assets')
+            versions = VersionManager(fixture.parent)
             exe = game(Path(td) / 'NativeGame')
             (exe.parent / 'libxess.dll').write_bytes(b'native xess')
             analysis = {'target_dir': str(exe.parent), 'target_exe': str(exe), 'game_name': 'NativeGame'}
             
             # In automatic mode, unlisted game yields error
-            auto_plan = build_plan(analysis, {'installation_mode': 'automatic', 'upscaler_enabled': True})
+            auto_plan = build_plan(analysis, {'installation_mode': 'automatic', 'upscaler_enabled': True}, versions)
             self.assertTrue(any('No supported upscaler input' in e for e in auto_plan['errors']))
             
             # In manual mode, user choice to install XeSS upscaler succeeds and is not blocked
-            manual_plan = build_plan(analysis, {'installation_mode': 'manual', 'upscaler_enabled': True, 'hook_method': 'dxgi.dll'})
+            manual_plan = build_plan(analysis, {'installation_mode': 'manual', 'upscaler_enabled': True, 'hook_method': 'dxgi.dll'}, versions)
             self.assertEqual(manual_plan['errors'], [])
             self.assertTrue(manual_plan['settings']['upscaler_enabled'])
             self.assertIn('dxgi.dll', manual_plan['files'])

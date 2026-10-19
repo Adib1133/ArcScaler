@@ -2,6 +2,7 @@
 from contextlib import ExitStack
 import configparser
 import os
+import time
 from pathlib import Path
 import psutil
 from core.files import atomic_write, canonical, inside, operation_lock, safe_path, sha256, validate_pe
@@ -11,6 +12,7 @@ from core.version_manager import VersionManager
 from core.detector import GameDetector
 from core.install_plan import build_plan
 from core.settings import HOOKS, validate, SCHEMA
+from core.native_runtimes import BUNDLED, resolve_deployment_package
 
 
 def _merge_ini(old_text, new_text):
@@ -74,7 +76,8 @@ class Injector:
                         intercept_fsr3=False, reflex_to_xell_enabled=False, reflex_boost=False,
                         xess_network_model=None, sharpness=0.3, custom_scale=None, invert_depth=None,
                         jitter_cancellation=None, fg_input=None, base_dir=None, upscaler_enabled=False,
-                        gpu_spoofing=False, installation_mode='automatic', force=False, compatibility_path=None, hardware=None, expected_plan=None):
+                        gpu_spoofing=False, installation_mode='automatic', force=False, compatibility_path=None, hardware=None, expected_plan=None,
+                        runtime_method=BUNDLED, native_xess_path='', native_xefg_path='', native_xell_path=''):
         """Deploy OptiScaler into a game directory.
 
         force=True bypasses plan validation errors, skips the unmanaged-proxy block,
@@ -99,6 +102,8 @@ class Injector:
             if not force and installation_mode == 'automatic' and len(dirs) > 1:
                 raise ValueError('Automatic recipes deploy to one verified game executable directory only.')
             root = Path(base_dir).resolve() if base_dir else Path(os.path.commonpath(list(dirs.values())))
+            if runtime_method != BUNDLED and len(dirs) != 1:
+                raise ValueError('Native runtime reuse installs into one game executable directory only.')
             if root == Path(root.anchor) or any(not inside(d, root) for d in dirs.values()):
                 raise ValueError('All targets must be inside one game installation.')
             active = optiscaler_version
@@ -119,6 +124,7 @@ class Injector:
                 analysis['discovered_locations'], analysis['detected_upscalers'] = (
                     GameDetector._deep_scan_upscalers(str(root), str(primary)))
                 analysis['all_target_dirs'] = list(dirs.values())
+                analysis['base_dir'] = str(root)
                 analysis['anti_cheat'] = GameDetector._detect_anti_cheat(str(primary), str(root))
                 resolved_input = fg_input or (
                     'dlssg' if intercept_dlssg else 'fsrfg' if intercept_fsr3 else 'upscaler')
@@ -126,8 +132,10 @@ class Injector:
                     fg_input=resolved_input, force=force, optiscaler_version=active,
                     compatibility_path=compatibility_path, hardware=hardware or {}), self.version_manager)
                 if expected_plan and any(deployment.get(key) != expected_plan.get(key)
-                                         for key in ('target_dir','files','settings','source_hashes','ini_overrides')):
+                                         for key in ('target_dir','files','settings','source_hashes','ini_overrides','reused_files','target_hashes')):
                     raise ValueError('The installation plan changed. Review a fresh preview before installing.')
+                if deployment.get('blocking_error'):
+                    raise ValueError(deployment['blocking_error'])
                 if frame_gen_enabled and analysis.get('graphics_api') != 'DX12':
                     raise ValueError('Frame Generation requires detected DirectX 12.')
                 if deployment['errors'] and not force:
@@ -146,9 +154,9 @@ class Injector:
                 if not force:
                     hook_method = effective.get('hook_method', hook_method)
                     starting_upscaler = effective.get('starting_upscaler', starting_upscaler)
-                package = self.version_manager.resolve_package(
-                    active, frame_gen_enabled, upscaler_enabled,
-                    frame_gen_enabled or gpu_spoofing or reflex_to_xell_enabled)
+                package, reused_files, _ = resolve_deployment_package(analysis, effective, self.version_manager)
+                if reused_files != deployment.get('reused_files', {}):
+                    raise ValueError('Native runtimes changed. Review a fresh preview before installing.')
 
                 # ── INI: generate then overlay any pre-existing user customisations ─────
                 existing_ini = None
@@ -201,6 +209,7 @@ class Injector:
                     'additional_dirs': [d for d in dirs.values()
                                         if canonical(d) != canonical(primary)],
                     'force_injected': force,
+                    'reused_files': reused_files,
                 }
                 if SafetyManager.has_active_backup(primary):
                     old_manifest = SafetyManager.load_manifest(primary, list(dirs.values()))
@@ -208,10 +217,17 @@ class Injector:
                     if old_manifest.get('operation',{}).get('state') not in (None,'complete'):
                         raise ValueError('An interrupted operation needs recovery before installing again.')
                     conflicts = SafetyManager.conflicts(old_manifest)
-                    if conflicts:
+                    if conflicts and not force:
                         return {'success':False,'error':'Externally modified files need review. Restore original files with preservation before reinstalling.', 'conflicts':conflicts}
+                    if conflicts:
+                        SafetyManager.preserve_conflicts(old_manifest)
                 # No game mutation before snapshot success.
+                if any(not Path(path).is_file() or sha256(path) != digest for path, digest in reused_files.items()):
+                    raise ValueError('Native runtimes changed before installation. Review a fresh preview.')
+                undo_checkpoint = SafetyManager.capture_undo(str(primary), plan)
                 manifest = SafetyManager.create_multi_dir_snapshot(plan, metadata, str(primary))
+                if undo_checkpoint:manifest['undo'] = undo_checkpoint
+                else:manifest.pop('undo', None)
                 try:
                     import hashlib
                     expected_hashes = {name:hashlib.sha256(source).hexdigest() if isinstance(source,bytes) else sha256(source) for name,source in files.items()}
@@ -241,11 +257,16 @@ class Injector:
                                 if sha256(dest) != expected:
                                     raise OSError(f'Deployment verification failed: {dest}')
                     SafetyManager.save_stage(manifest, 'verifying')
+                    if any(not Path(path).is_file() or sha256(path) != digest for path, digest in reused_files.items()):
+                        raise ValueError('A reused native runtime changed during installation.')
                     manifest['metadata']['deployed_files'] = {folder:{name:sha256(safe_path(folder,name)) for name in files} for folder in dirs.values()}
                     if any(hashes != expected_hashes for hashes in manifest['metadata']['deployed_files'].values()):
                         raise OSError('Final installed hashes do not match the planned files.')
                     manifest['metadata']['installed_hashes'] = manifest['metadata']['deployed_files'][str(primary)]
+                    manifest['metadata']['installed_at'] = time.time()
                     SafetyManager.save_stage(manifest, 'complete')
+                    try:SafetyManager.prune_undo(manifest)
+                    except OSError:pass
                 except Exception as exc:
                     try:
                         self._check_processes(target_exe, dirs.values())
@@ -302,3 +323,13 @@ class Injector:
             return ConfigGenerator.MARKER_SIGNATURE in content
         except OSError:
             return False
+
+    def undo_last_change(self, target_dir, target_exe='', additional_dirs=None):
+        try:
+            dirs = {canonical(d): str(Path(d).resolve()) for d in [target_dir, *(additional_dirs or [])]}
+            with ExitStack() as stack:
+                for d in sorted(dirs.values(), key=canonical):stack.enter_context(operation_lock(d))
+                self._check_processes(target_exe, dirs.values())
+                return SafetyManager.undo_last(target_dir, list(dirs.values()))
+        except Exception as exc:
+            return {'success':False, 'error':str(exc)}

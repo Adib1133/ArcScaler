@@ -56,6 +56,21 @@ def prepare_assets():
     versions.mkdir(parents=True, exist_ok=True)
     bundled = resource_root() / 'assets/versions'
     with operation_lock(versions):
+        compact = resource_root() / 'assets/offline-runtime.zip'
+        if compact.is_file() and not (versions / 'v0.9.4').exists():
+            from core.bundle import unpack
+            from core.version_manager import VersionManager
+            stage = versions / '.seed-v0.9.4'
+            if stage.exists():
+                shutil.rmtree(stage)
+            stage.mkdir()
+            try:
+                unpack(compact, stage / 'v0.9.4')
+                VersionManager(stage).resolve_package('v0.9.4')
+                os.replace(stage / 'v0.9.4', versions / 'v0.9.4')
+            finally:
+                if stage.exists():
+                    shutil.rmtree(stage)
         if bundled.is_dir() and bundled.resolve() != versions.resolve():
             from core.version_manager import VersionManager
             source_vm = VersionManager(bundled)

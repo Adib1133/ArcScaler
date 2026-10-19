@@ -1,7 +1,0 @@
-{
-  "exit_code": 0,
-  "version": "1.1.0",
-  "isolated_data": true,
-  "log": "2026-09-26 17:11:09,051 INFO ArcScaler started.\n2026-09-26 17:11:09,272 INFO Detected Intel(R) UHD Graphics 730 (Driver: 32.0.101.7088). XeSS path: DP4a Instructions.\n",
-  "launcher_matches_dist": true
-}

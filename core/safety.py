@@ -177,6 +177,102 @@ class SafetyManager:
         return SafetyManager.create_multi_dir_snapshot({target_dir: planned_files}, metadata, target_dir)
 
     @staticmethod
+    def capture_undo(primary_dir, plan):
+        """One previous deployment; original-game backups remain independent."""
+        if not SafetyManager.has_active_backup(primary_dir):return None
+        previous = SafetyManager.load_manifest(primary_dir, list(plan))
+        if previous.get('operation', {}).get('state') != 'complete':
+            raise ValueError('Complete recovery before creating an undo checkpoint.')
+        entries = {}
+        backup = safe_path(primary_dir, SafetyManager.BACKUP_DIR_NAME)
+        for folder, record in previous['folders'].items():
+            names = set(plan.get(folder, [])) | set(record['created_files']) | {i['filename'] for i in record['overwritten_files']}
+            entries[folder] = {}
+            for name in sorted(names):
+                if not SafetyManager.managed_name(name):raise ValueError('Invalid undo filename.')
+                path = safe_path(folder, name)
+                entries[folder][name] = None
+                if path.exists():
+                    digest = sha256(path)
+                    dest = safe_path(backup, f'undo/{digest}.bin')
+                    atomic_write(dest, source=path)
+                    if sha256(dest) != digest or sha256(path) != digest:
+                        raise OSError('File changed while creating undo checkpoint.')
+                    entries[folder][name] = {'copy': str(dest), 'sha256': digest}
+        for folder, names in plan.items():
+            if folder not in entries:
+                # New secondary directories need their own originals snapshotted too.
+                entries[folder] = {}
+                for name in names:
+                    path = safe_path(folder, name)
+                    entries[folder][name] = None
+                    if path.exists():
+                        digest = sha256(path);dest = safe_path(backup, f'undo/{digest}.bin')
+                        atomic_write(dest, source=path)
+                        if sha256(dest) != digest or sha256(path) != digest:raise OSError('Undo snapshot changed.')
+                        entries[folder][name] = {'copy': str(dest), 'sha256': digest}
+        return {'entries': entries, 'metadata': copy.deepcopy(previous['metadata'])}
+
+    @staticmethod
+    def prune_undo(manifest, keep=True):
+        """Bound disk use to the single retained checkpoint; never remove preserved edits."""
+        folder = safe_path(Path(manifest['primary_dir']) / SafetyManager.BACKUP_DIR_NAME, 'undo')
+        wanted = {item['copy'] for entries in manifest.get('undo', {}).get('entries', {}).values()
+                  for item in entries.values() if item} if keep else set()
+        if folder.is_dir():
+            for path in folder.glob('*.bin'):
+                if str(path) not in wanted and len(path.stem) == 64 and all(c in '0123456789abcdef' for c in path.stem):
+                    safe_path(folder, path.name).unlink()
+            try:folder.rmdir()
+            except OSError:pass
+
+    @staticmethod
+    def undo_last(target_dir, additional_dirs=None):
+        """Caller holds directory locks and has checked game processes."""
+        manifest = SafetyManager.load_manifest(target_dir, additional_dirs)
+        checkpoint = manifest.get('undo')
+        if not checkpoint:raise ValueError('No previous update to undo. Use Restore original files for the first installation.')
+        if manifest.get('operation', {}).get('state') not in ('complete', 'undoing'):
+            raise ValueError('Recover the interrupted operation first.')
+        backup = Path(target_dir) / SafetyManager.BACKUP_DIR_NAME
+        expected = {}
+        # Validate the entire checkpoint and all destinations before any mutation.
+        if set(checkpoint['entries']) != set(manifest['folders']):raise ValueError('Invalid undo folders.')
+        for folder, entries in checkpoint['entries'].items():
+            record = manifest['folders'][folder]
+            tracked = set(record['created_files']) | {i['filename'] for i in record['overwritten_files']}
+            if set(entries) != tracked:raise ValueError('Invalid undo file set.')
+            expected[folder] = {}
+            for name, item in entries.items():
+                safe_path(folder, name)
+                if item:
+                    digest = item['sha256']
+                    if len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):raise ValueError('Invalid undo hash.')
+                    source = safe_path(backup, f'undo/{digest}.bin')
+                    if str(source) != item['copy'] or not source.is_file() or sha256(source) != digest:
+                        raise ValueError('Undo checkpoint is missing or corrupt; original backups retained.')
+                    expected[folder][name] = digest
+        validation = copy.deepcopy(manifest);validation['metadata'] = checkpoint['metadata']
+        SafetyManager.deployed_hashes(validation)
+        conflicts = SafetyManager.conflicts(manifest)
+        if conflicts:return {'success':False, 'conflicts':conflicts, 'error':'Files changed outside ArcScaler. Preserve them with Restore original files, or review them before undo.'}
+        SafetyManager.save_stage(manifest, 'undoing', previous=SafetyManager.deployed_hashes(manifest), expected=expected)
+        for folder, entries in checkpoint['entries'].items():
+            for name, item in entries.items():
+                target = safe_path(folder, name)
+                if item:
+                    SafetyManager._safe_copy(item['copy'], target)
+                    if sha256(target) != item['sha256']:raise OSError('Undo verification failed.')
+                else:SafetyManager._safe_remove(target)
+        manifest['metadata'] = checkpoint['metadata']
+        manifest['metadata']['installed_at'] = time.time()
+        manifest.pop('undo', None)
+        SafetyManager.save_stage(manifest, 'complete', previous={}, expected={})
+        try:SafetyManager.prune_undo(manifest, keep=False)
+        except OSError:pass
+        return {'success':True, 'message':'Previous deployment restored. Original-game backups remain available.'}
+
+    @staticmethod
     def restore_files(manifest, selection=None):
         conflicts = SafetyManager.conflicts(manifest, selection)
         if conflicts:raise ValueError('Files changed outside ArcScaler; preserve them before recovery: '+', '.join(conflicts))
@@ -225,6 +321,7 @@ class SafetyManager:
             os.replace(backup / 'manifest.json', retired)
             warning = ''
             try:
+                SafetyManager.prune_undo(manifest, keep=False)
                 for record in manifest['folders'].values():
                     for item in record['overwritten_files']:
                         Path(item['backup_path']).unlink(missing_ok=True)

@@ -1,9 +1,0 @@
-{
-  "exit_code": 0,
-  "elapsed_seconds": 4.62,
-  "standalone_no_sibling_assets": true,
-  "bundled_package_seeded": true,
-  "application_log": "2026-09-20 17:03:51,205 INFO ArcScaler started.\n2026-09-20 17:03:51,292 INFO Detected Intel(R) UHD Graphics 730 (Driver: 32.0.101.7088). XeSS path: DP4a Instructions.\n",
-  "stderr": "",
-  "seed_hash_matches": true
-}

@@ -24,6 +24,8 @@ class MainWindow(ctk.CTk):
     def __init__(self):
         ctk.set_appearance_mode('Dark');ctk.set_default_color_theme('blue')
         super().__init__()
+        from gui.tk_lifecycle import TkCollection
+        self._tk_collection = TkCollection(self)
         self.title('ArcScaler');self.minsize(600,500);self.configure(fg_color=BG)
         self.protocol('WM_DELETE_WINDOW',self._on_close)
         icon=resource_root()/'assets/arcscaler.ico'
@@ -335,3 +337,9 @@ class MainWindow(ctk.CTk):
 
     def cancel_timers(self):
         for timer in self.tk.splitlist(self.tk.call('after','info')):self.tk.call('after','cancel',timer)
+
+    def destroy(self):
+        try:
+            super().destroy()
+        finally:
+            if hasattr(self, '_tk_collection'):self._tk_collection.close()

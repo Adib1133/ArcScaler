@@ -1,10 +1,10 @@
 """ArcScaler's shared native widget palette and focus behavior."""
 import customtkinter as ctk
 
-BG='#0A0D12'
-SIDE='#0C1016'
-PANEL='#151F2C'
-BORDER='#354B64'
+BG='#090A0C'
+SIDE='#0E1013'
+PANEL='#16191E'
+BORDER='#343A43'
 TEXT='#EEF3FA'
 MUTED='#8B9CB6'
 BLUE='#3985FF'
@@ -29,8 +29,8 @@ class GlassButton(ctk.CTkButton):
 
 def button(parent,text,command,primary=False,**kwargs):
     return GlassButton(parent,text=text,command=command,height=36,corner_radius=14,
-                        fg_color=BLUE if primary else '#202E40',hover_color='#285FAB' if primary else '#304862',
-                        border_width=1,border_color='#79ADFF' if primary else '#48617E',text_color=TEXT,
+                        fg_color=BLUE if primary else '#22262D',hover_color='#285FAB' if primary else '#30363F',
+                        border_width=1,border_color='#79ADFF' if primary else '#454E5A',text_color=TEXT,
                         font=ctk.CTkFont(family='Segoe UI',size=12,weight='bold'),**kwargs)
 
 def card(parent):

@@ -33,6 +33,7 @@ class ConfigTab(ctk.CTkFrame):
         self.recommendation = None
         self.health = None
         self._evidence = None
+        self.runtime_state = None
         self._plan_timer = None
         self._view_timer = None
         self._scan_pending = False
@@ -62,11 +63,11 @@ class ConfigTab(ctk.CTkFrame):
         self.action_hint_lbl.pack(fill='x',padx=18,pady=(3,0))
         actions=ctk.CTkFrame(bar,fg_color='transparent');actions.pack(fill='x',padx=18,pady=(3,12))
         self.revert_btn=button(actions,'Restore original files',self.revert_changes,width=150)
-        self.force_btn=button(actions,'Force inject',self.force_injection,width=100)
+        self.revert_btn.pack(side='left',padx=(0,8))
         self.progress=ctk.CTkProgressBar(bar,height=3,mode='indeterminate');self.progress.pack(fill='x');self.progress.set(0)
         self.apply_btn=button(actions,'Install to game',self.apply_injection,primary=True,width=110);self.apply_btn.pack(side='right')
         self.launch_btn=button(actions,'Launch',self.launch_and_protect,width=95);self.launch_btn.pack(side='right',padx=8)
-        self.draft_lbl=label(actions,'Draft saved',muted=True);self.draft_lbl.pack(side='left')
+        self.draft_lbl=label(bar,'Draft saved',muted=True);self.draft_lbl.pack(anchor='w',padx=18,before=actions)
         self.scroll=ContentFrame(self,fg_color=BG,corner_radius=0)
         self.scroll.pack(fill='both',expand=True)
         header=ctk.CTkFrame(self.scroll,fg_color='transparent');header.pack(fill='x',padx=22,pady=(20,14))
@@ -97,10 +98,17 @@ class ConfigTab(ctk.CTkFrame):
             body=ctk.CTkFrame(box,fg_color='transparent');body.pack(fill='x',padx=18,pady=16)
             return body
         suggestions=card(self.scroll);suggestions.pack(fill='x',padx=22,pady=(0,14))
-        heading=label(suggestions,'Suggested preset');heading.configure(font=ctk.CTkFont(size=15,weight='bold'));heading.pack(anchor='w',padx=18,pady=(14,4))
-        self.suggestion_lbl=label(suggestions,'Select a game to see recommendations.',muted=True,wraplength=470,justify='left')
+        heading=label(suggestions,'Choose setup');heading.configure(font=ctk.CTkFont(size=15,weight='bold'));heading.pack(anchor='w',padx=18,pady=(14,4))
+        from core.workflows import GOALS
+        self.goal_menu=ctk.CTkOptionMenu(suggestions,values=list(GOALS),command=self._choose_goal)
+        self.goal_menu.set('Advanced configuration');self.goal_menu.pack(fill='x',padx=18,pady=6)
+        self.route_lbl=label(suggestions,'Select a game to choose a route.',muted=True,wraplength=470,justify='left',anchor='w')
+        self.route_lbl.pack(fill='x',padx=18,pady=6)
+        button(suggestions,'Suggested settings',lambda:self._toggle_panel(self.suggestion_details)).pack(anchor='w',padx=18,pady=(0,10))
+        self.suggestion_details=ctk.CTkFrame(suggestions,fg_color='transparent')
+        self.suggestion_lbl=label(self.suggestion_details,'Select a game to see recommendations.',muted=True,wraplength=470,justify='left')
         self.suggestion_lbl.pack(anchor='w',padx=18,pady=6)
-        self.suggest_btn=button(suggestions,'Apply suggestion to draft',self._use_suggestions)
+        self.suggest_btn=button(self.suggestion_details,'Apply suggestion to draft',self._use_suggestions)
         self.suggest_btn.pack(anchor='w',padx=18,pady=(4,14))
         self.sr_body=section('Super Resolution','Improve image detail with XeSS',self.upscaler_var,'upscaler_enabled')
         self.gauge=tk.Canvas(self.sr_body,width=135,height=155,bg=PANEL,highlightthickness=0)
@@ -113,7 +121,7 @@ class ConfigTab(ctk.CTkFrame):
             label(row,spec.label).pack(side='left')
             values=['auto' if v is None else str(v).lower() if type(v) is bool else str(v) for v in spec.options]
             widget=ctk.CTkOptionMenu(row,variable=self.variables[key],values=values or ['No installed releases'],
-                width=145,height=30,corner_radius=12,fg_color='#24364B',button_color='#2D435C',button_hover_color=BORDER,
+                width=145,height=30,corner_radius=12,fg_color='#242830',button_color='#30363F',button_hover_color=BORDER,
                 command=self._on_pipeline_param_changed)
             widget.pack(side='right');self.controls[key]=widget
             return widget
@@ -121,7 +129,7 @@ class ConfigTab(ctk.CTkFrame):
         self.quality_segments=ctk.CTkSegmentedButton(options,
             values=[v for v in SCHEMA['xess_quality'].options if v in ('Ultra Quality','Quality','Balanced','Performance')],
             variable=self.quality_var,command=self._on_pipeline_param_changed,
-            selected_color='#365E85',unselected_color='#202E40',corner_radius=10,font=ctk.CTkFont(size=11))
+            selected_color='#344A64',unselected_color='#22262D',corner_radius=10,font=ctk.CTkFont(size=11))
         self.quality_segments.pack(fill='x',pady=(0,8))
         self.sr_details_button=button(options,'Fine-tune resolution and sharpness',lambda:self._toggle_panel(self.sr_details))
         self.sr_details_button.pack(fill='x',pady=8)
@@ -140,8 +148,39 @@ class ConfigTab(ctk.CTkFrame):
         self.fg_body=section('Frame Generation','DirectX 12 only',self.frame_gen_var,'frame_gen_enabled')
         menu(self.fg_body,'fg_input')
         self.fg_description=label(self.fg_body,'',muted=True,wraplength=480,justify='left');self.fg_description.pack(anchor='w',pady=6)
+        self.native_body=card(self.scroll);self.native_body.pack(fill='x',padx=22,pady=(0,14))
+        label(self.native_body,'Reuse native XeSS').pack(anchor='w',padx=18,pady=(14,4))
+        self.native_note=label(self.native_body,
+            'DirectX 12: reuse existing XeSS libraries, or keep native upscaling and add missing FG libraries. '
+            'Only missing runtimes and required helpers are installed. Compatibility must be verified in game.',
+            muted=True,wraplength=470,justify='left')
+        self.native_note.pack(fill='x',padx=18,pady=6)
+        self.controls['runtime_method']=ctk.CTkOptionMenu(self.native_body,
+            variable=self.variables['runtime_method'],values=list(SCHEMA['runtime_method'].options),
+            command=self._native_method_changed)
+        self.controls['runtime_method'].pack(fill='x',padx=18,pady=8)
+        self.native_paths=ctk.CTkFrame(self.native_body,fg_color='transparent')
+        self.native_rows={}
+        for key in ('native_xess_path','native_xefg_path','native_xell_path'):
+            group=ctk.CTkFrame(self.native_paths,fg_color='transparent');group.pack(fill='x')
+            self.native_rows[key]=group
+            label(group,SCHEMA[key].label,muted=True).pack(anchor='w',padx=18)
+            row=ctk.CTkFrame(group,fg_color='transparent');row.pack(fill='x',padx=18,pady=(2,8))
+            entry=ctk.CTkEntry(row,textvariable=self.variables[key],placeholder_text='Auto-detect when blank')
+            entry.pack(side='left',fill='x',expand=True)
+            entry.bind('<FocusOut>',self._on_pipeline_param_changed)
+            entry.bind('<Return>',self._on_pipeline_param_changed)
+            self.controls[key]=entry
+            button(row,'Browse',lambda k=key:self._browse_native_runtime(k),width=65).pack(side='right',padx=(6,0))
+        label(self.native_paths,'Blank paths use detected files. Multiple matches require a selection. '
+            'Use Install to game below to review the exact file list; Restore original files reverses deployment.',
+            muted=True,wraplength=470,justify='left').pack(fill='x',padx=18,pady=(0,14))
         evidence=card(self.scroll);evidence.pack(fill='x',padx=22,pady=(0,14))
         label(evidence,'Runtime evidence').pack(anchor='w',padx=18,pady=(14,4))
+        self.runtime_lbl=label(evidence,'Runtime not verified',muted=True,wraplength=470,justify='left')
+        self.runtime_lbl.pack(fill='x',padx=18,pady=6)
+        self.confirm_route_btn=button(evidence,'Confirm route seen in overlay',self._confirm_runtime)
+        self.confirm_route_btn.pack(anchor='w',padx=18,pady=6)
         self.evidence_rows={}
         for key,title in [('dlss','DLSS'),('fsr','FSR / FidelityFX'),('xess','XeSS upscaling'),('dlssg','DLSS Frame Generation'),('fsrfg','FSR Frame Generation'),('xefg','XeSS Frame Generation')]:
             item=label(evidence,title+' · Awaiting scan',anchor='w')
@@ -154,6 +193,10 @@ class ConfigTab(ctk.CTkFrame):
         compatibility=card(self.scroll);compatibility.pack(fill='x',padx=22,pady=(0,14))
         button(compatibility,'Advanced settings',self._toggle_compatibility).pack(fill='x',padx=10,pady=10)
         self.compatibility_body=ctk.CTkFrame(compatibility,fg_color='transparent')
+        self.force_btn=button(self.compatibility_body,'Force inject (advanced)',self.force_injection,width=170)
+        self.force_btn.pack(anchor='w',pady=8)
+        self.undo_btn=button(self.compatibility_body,'Undo last change',self.undo_last_change,width=170)
+        self.undo_btn.pack(anchor='w',pady=8)
         menu(self.compatibility_body,'xess_network_model')
         for key,spec in SCHEMA.items():
             if spec.mode!='compatibility':continue
@@ -169,7 +212,7 @@ class ConfigTab(ctk.CTkFrame):
     def _resize_labels(self,event):
         if event.widget is not self:return
         width=max(220,int(event.width/self._get_widget_scaling())-88)
-        for widget in (self.info_lbl,self.health_lbl,self.suggestion_lbl,self.evidence_files,self.plan_lbl,self.fg_description,self.action_hint_lbl):widget.configure(wraplength=width)
+        for widget in (self.info_lbl,self.health_lbl,self.suggestion_lbl,self.evidence_files,self.plan_lbl,self.fg_description,self.action_hint_lbl,self.native_note,self.route_lbl,self.runtime_lbl):widget.configure(wraplength=width)
         self.title_lbl.configure(wraplength=max(160,width-130))
         compact=width<510
         if compact!=getattr(self,'_compact_sr',None):
@@ -272,7 +315,7 @@ class ConfigTab(ctk.CTkFrame):
         menu.place(relx=1,x=-24,y=max(8,y),anchor='ne');menu.lift()
         def invoke(action):
             menu.destroy();action()
-        for text,action in [('Open game folder',self.open_game_folder),('Rescan',self.rescan),('Verify installed files',self.verify),('Restore original files',self.revert_changes),('Export diagnostics',self.export_diagnostics),('Force inject (advanced)',self.force_injection),('Remove from library',self.remove_game)]:
+        for text,action in [('Open game folder',self.open_game_folder),('Rescan',self.rescan),('Verify installed files',self.verify),('Undo last change',self.undo_last_change),('Restore original files',self.revert_changes),('Export diagnostics',self.export_diagnostics),('Force inject (advanced)',self.force_injection),('Remove from library',self.remove_game)]:
             item=button(menu,text,lambda fn=action:invoke(fn),width=240,anchor='w')
             item.configure(fg_color='transparent',border_width=0,text_color='#FFB52E' if action==self.remove_game else '#EEF3FA')
             if action in (self.verify,self.revert_changes) and (self.health or {}).get('state')=='not_installed':item.configure(state='disabled')
@@ -393,12 +436,86 @@ class ConfigTab(ctk.CTkFrame):
         self._schedule_research()
         self._update_pipeline_view()
 
+    def _native_method_changed(self, value):
+        from core.native_runtimes import BUNDLED, REUSE
+        if value != BUNDLED:
+            self.upscaler_var.set(value == REUSE)
+            self.frame_gen_var.set(True)
+            self.starting_upscaler_var.set('DLSS')
+            self.fg_input_var.set('dlssg')
+        self._on_pipeline_param_changed()
+
+    def _choose_goal(self, goal):
+        if not self.current_profile or self.busy:return
+        from core.workflows import goal_settings, GOALS
+        if goal == GOALS[-1]:
+            if not self.compatibility_body.winfo_manager():self._toggle_compatibility()
+            return
+        values=goal_settings(goal,self._settings(),bool((self.support or {}).get('xess')))
+        for key in ('runtime_method','upscaler_enabled','frame_gen_enabled','starting_upscaler','fg_input'):
+            self.variables[key].set(values[key])
+        self._on_pipeline_param_changed()
+
+    def _confirm_runtime(self):
+        if self.busy or not self.current_profile or (self.health or {}).get('state') != 'installed':return
+        if not getattr(self, '_draft_matches', False):return
+        signature=(self.runtime_state or {}).get('signature')
+        if not signature:return
+        if messagebox.askyesno('Confirm active route','Have you checked the OptiScaler overlay in this game and verified the input and XeSS output shown in the route summary?'):
+            import time
+            value={'signature':signature,'confirmed_at':time.time()}
+            self.library.update_profile(self.current_profile['id'],{'runtime_confirmation':value})
+            self.current_profile['runtime_confirmation']=value
+            self.rescan()
+
+    def undo_last_change(self):
+        if self.busy or not self.current_profile:return
+        profile=dict(self.current_profile)
+        if not messagebox.askyesno('Undo last change','Restore the previous deployment? Original-game backups remain available. This does not certify the previous setup worked in game.'):return
+        def done(result):
+            if result.get('success'):
+                health=self.injector.verify_installation(profile['target_dir'],profile.get('recovery_dirs',[]))
+                values=health.get('requested_settings') or health.get('settings') or {}
+                from core.settings import SCHEMA
+                self.library.update_profile(profile['id'],{k:v for k,v in values.items() if k in SCHEMA})
+                self.load_game(self.library.profiles[profile['id']])
+            else:messagebox.showerror('Undo failed',result.get('error','Unknown error'))
+            self.log(result.get('message',result.get('error','')), 'success' if result.get('success') else 'error')
+        self._run(lambda:self.injector.undo_last_change(profile['target_dir'],profile['target_exe'],
+            profile.get('recovery_dirs',profile.get('all_target_dirs',[]))),done)
+
+    def _browse_native_runtime(self, key):
+        from tkinter import filedialog
+        if not self.current_profile or self.busy:return
+        path=filedialog.askopenfilename(parent=self.winfo_toplevel(),title='Select existing game runtime',
+            initialdir=self.current_profile.get('base_dir') or self.current_profile['target_dir'],
+            filetypes=[('Windows DLL','*.dll')])
+        if path:
+            self.variables[key].set(path)
+            self._on_pipeline_param_changed()
+
     def _update_pipeline_view(self):
         from gui.theme import enabled_tree
         sr,fg=self.upscaler_var.get(),self.frame_gen_var.get()
         enabled_tree(self.sr_body,sr and not self.busy)
         enabled_tree(self.fg_body,fg and not self.busy)
+        for body, enabled in ((self.sr_body,sr),(self.fg_body,fg)):
+            if enabled and not body.winfo_manager():body.pack(fill='x',padx=18,pady=16)
+            elif not enabled:body.pack_forget()
         enabled_tree(self.compatibility_body,not self.busy)
+        enabled_tree(self.native_body,not self.busy and bool(self.current_profile))
+        self.goal_menu.configure(state='normal' if self.current_profile and not self.busy else 'disabled')
+        from core.workflows import current_goal
+        self.goal_menu.set(current_goal(self._settings()))
+        from core.workflows import route_summary
+        self.route_lbl.configure(text=route_summary(self._settings(),self.preview_plan if not self._scan_pending else None))
+        for key, group in self.native_rows.items():
+            visible=key=='native_xess_path' or fg or (key=='native_xell_path' and (self.spoof_var.get() or self.reflex_var.get()))
+            if visible and not group.winfo_manager():group.pack(fill='x')
+            elif not visible:group.pack_forget()
+        if self.variables['runtime_method'].get() != 'Bundled runtimes':
+            if not self.native_paths.winfo_manager():self.native_paths.pack(fill='x')
+        else:self.native_paths.pack_forget()
         for switch in self.section_switches:switch.configure(state='disabled' if self.busy else 'normal',text='On' if switch.get() else 'Off')
         self.scale_slider.configure(state='normal' if sr and self.custom_scale_enabled_var.get() and not self.busy else 'disabled')
         if not self.custom_scale_enabled_var.get():
@@ -413,6 +530,8 @@ class ConfigTab(ctk.CTkFrame):
         self.force_btn.configure(state='normal' if self.current_profile and (sr or fg) and not self.busy else 'disabled')
         self.action_hint_lbl.configure(text='' if sr or fg else 'Turn on Super Resolution or Frame Generation to install.')
         self._refresh_action_state()
+        self.runtime_lbl.configure(text=(self.runtime_state or {}).get('message','Runtime not verified') if (self.health or {}).get('state')=='installed' else 'Runtime confirmation unavailable until installed files verify')
+        self.confirm_route_btn.configure(state='normal' if not self.busy and (self.health or {}).get('state')=='installed' and getattr(self,'_draft_matches',False) else 'disabled')
         self._refresh_labels()
 
     def _refresh_action_state(self):
@@ -427,13 +546,15 @@ class ConfigTab(ctk.CTkFrame):
             return abs(a-b)<0.00001 if type(a) in (float,int) and type(b) in (float,int) else a==b
         from core.settings import SCHEMA
         changed=not baseline or any(not equal(selected[k],baseline.get(k)) for k in SCHEMA)
+        self._draft_matches = not changed
         self.draft_lbl.configure(text='Unsaved changes' if getattr(self,'_draft_error',None) else 'Changes not installed' if changed else 'Draft matches install',text_color='#FFBF69' if changed else '#42D9A0')
         blocked=state in ('recovery_required','modified','incomplete')
         self.apply_btn.configure(text='Up to date' if state=='installed' and not changed else 'Update installation' if state not in ('not_installed','checking') else 'Install to game',
                                  state='normal' if not self.busy and not blocked and (self.upscaler_var.get() or self.frame_gen_var.get()) and (changed or state!='installed') else 'disabled')
         self.launch_btn.configure(state='normal' if not self.busy and state=='installed' else 'disabled')
-        self.force_btn.configure(state='normal' if not self.busy and not blocked and (self.upscaler_var.get() or self.frame_gen_var.get()) else 'disabled')
+        self.force_btn.configure(state='normal' if not self.busy and state not in ('recovery_required','checking') and (self.upscaler_var.get() or self.frame_gen_var.get()) else 'disabled')
         self.revert_btn.configure(state='normal' if not self.busy and state not in ('not_installed','checking') else 'disabled')
+        self.undo_btn.configure(state='normal' if not self.busy and (self.health or {}).get('can_undo') else 'disabled')
         self.suggest_btn.configure(state='normal' if not self.busy and self.recommendation and self.recommendation['ready'] else 'disabled')
         self.recovery_btn.pack_forget()
         if blocked:
@@ -459,17 +580,20 @@ class ConfigTab(ctk.CTkFrame):
         cached_health=None if refresh else self.health
         def operation():
             from core.game_support import runtime_evidence
+            from core.runtime_status import runtime_status
             health=cached_health or installation_health(profile['target_dir'],profile.get('recovery_dirs',profile.get('all_target_dirs',[])))
+            runtime=runtime_status(profile['target_dir'],profile.get('recovery_dirs',profile.get('all_target_dirs',[])),profile.get('runtime_confirmation'),health)
             try:
                 analysis=cached or GameDetector.analyze_game(profile['target_exe'],profile.get('base_dir'))
-                if not analysis.get('valid'):return analysis,None,None,None,health,[]
+                if not analysis.get('valid'):return analysis,None,None,None,health,[],runtime
                 plan=build_plan(analysis,dict(settings,hardware=hardware),self.injector.version_manager)
-                return analysis,plan,capabilities(analysis),recommend(analysis,settings,self.injector.version_manager,hardware),health,runtime_evidence(analysis)
+                return analysis,plan,capabilities(analysis),recommend(analysis,settings,self.injector.version_manager,hardware),health,runtime_evidence(analysis),runtime
             except (OSError,ValueError,KeyError,TypeError) as exc:
-                return {'valid':False,'error':str(exc)},None,None,None,health,[]
+                return {'valid':False,'error':str(exc)},None,None,None,health,[],runtime
         def done(result):
             if generation!=self.research_generation or not self.current_profile or self.current_profile['id']!=profile['id']:return
-            analysis,plan,support,rec,health,evidence=result
+            analysis,plan,support,rec,health,evidence,runtime=result
+            self.runtime_state=runtime
             self._scan_pending=False;self._analysis=analysis if analysis.get('valid') else None
             self.preview_plan=plan;self.support=support;self.recommendation=rec;self.health=health
             self._evidence=evidence
@@ -561,26 +685,15 @@ class ConfigTab(ctk.CTkFrame):
             self.preview_plan=plan
             preview=format_plan(plan)
             self.log(preview,'warning' if plan['errors'] else 'info')
-            if plan['errors'] and not force:messagebox.showerror('Installation not ready',preview);return
-            dialog=ctk.CTkToplevel(self);dialog.title('ArcScaler · Review installation');dialog.geometry('680x560');dialog.transient(self.winfo_toplevel());dialog.grab_set()
-            from core.paths import resource_root
-            dialog.after(250,lambda:dialog.iconbitmap(str(resource_root()/'assets/arcscaler.ico')) if dialog.winfo_exists() else None)
-            text=ctk.CTkTextbox(dialog,wrap='word');text.pack(fill='both',expand=True,padx=16,pady=16);text.insert('1.0',preview);text.configure(state='disabled')
-            acknowledgement=None
-            if force:
-                acknowledgement=ctk.CTkCheckBox(dialog,text='I accept the risk of game failure or anti-cheat action.\nI have verified this is a supported offline configuration.')
-                acknowledgement.pack(padx=16,pady=8)
+            if plan.get('blocking_error') or (plan['errors'] and not force):messagebox.showerror('Installation not ready',preview);return
             def install():
-                if force and not acknowledgement.get():return
-                dialog.destroy()
                 def done(result):
                     self._record_result(profile,result)
                     self.log(result.get('message',result.get('error','')), 'success' if result.get('success') else 'error')
                     if not result.get('success'):messagebox.showerror('Installation failed',result.get('error','')+'\n'+str(result.get('recovery','')))
                 self._run(lambda:self.injector.apply_injection(profile['target_dir'],profile['target_exe'],base_dir=profile.get('base_dir'),expected_plan=plan,**settings),done)
-            from gui.theme import button
-            button(dialog,'Confirm force injection' if force else 'Confirm installation',install,primary=True).pack(side='right',padx=16,pady=12)
-            button(dialog,'Cancel',dialog.destroy).pack(side='right',pady=12)
+            from gui.install_preview import show_preview
+            show_preview(self, plan, force, install)
         self._run(prepare,ready)
 
     def launch_and_protect(self):

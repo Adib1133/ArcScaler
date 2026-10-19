@@ -94,6 +94,24 @@ class GUIIntegrationTests(unittest.TestCase):
         self.assertTrue((folder/'OptiScaler.ini').exists())
         self.assertEqual(self.app.library.profiles[self.profile['id']]['installed_mode'],'sr')
 
+    def test_native_runtime_section_saves_method_and_installs_fg_only(self):
+        from core.native_runtimes import ADD_FG
+        from tests.fixtures import runtime_bytes
+        folder=Path(self.profile['target_dir'])
+        native=folder/'libxess.dll'
+        original=runtime_bytes(marker=b'native XeSS')
+        native.write_bytes(original)
+        self.tab.variables['runtime_method'].set(ADD_FG)
+        self.tab._native_method_changed(ADD_FG)
+        self.assertFalse(self.tab.upscaler_var.get())
+        self.assertTrue(self.tab.frame_gen_var.get())
+        self.assertEqual(self.tab.native_paths.winfo_manager(),'pack')
+        self.tab.apply_injection();self.pump();self.confirm_preview();self.pump()
+        self.assertEqual(native.read_bytes(),original)
+        self.assertTrue((folder/'libxess_fg.dll').exists())
+        saved=self.app.library.profiles[self.profile['id']]
+        self.assertEqual(saved['runtime_method'],ADD_FG)
+
     def test_independent_modes_disable_only_their_own_controls(self):
         self.tab.upscaler_var.set(True);self.tab._toggle_mode('upscaler_enabled')
         self.assertEqual(self.tab.controls['fg_input'].cget('state'),'disabled')
@@ -237,11 +255,47 @@ class GUIIntegrationTests(unittest.TestCase):
             deadline=time.monotonic()+1
             while time.monotonic()<deadline:self.app.update();time.sleep(.02)
             self.app._responsive(None);self.app.update()
-            for widget in (self.tab.apply_btn,self.tab.launch_btn,self.tab.menu_button):
+            for widget in (self.tab.apply_btn,self.tab.launch_btn,self.tab.menu_button,self.tab.revert_btn,self.tab.goal_menu):
                 left=widget.winfo_rootx()-self.app.winfo_rootx()
-                self.assertGreaterEqual(left,0,(scale,widget.cget('text')))
-                self.assertLessEqual(left+widget.winfo_width(),self.app.winfo_width()+2,(scale,widget.cget('text')))
+                self.assertGreaterEqual(left,0,(scale,type(widget).__name__))
+                self.assertLessEqual(left+widget.winfo_width(),self.app.winfo_width()+2,(scale,type(widget).__name__))
             if scale=='200%':self.assertTrue(self.app.compact_nav.winfo_manager())
+
+    def test_goal_compactness_and_confirmation_scope(self):
+        import gc
+        from core.workflows import GOALS
+        from tests.fixtures import pe_bytes
+        (Path(self.profile['target_dir'])/'nvngx_dlss.dll').write_bytes(pe_bytes())
+        self.assertFalse(gc.isenabled(), 'Tk cyclic collection must be scheduled on the UI thread')
+        self.assertFalse(self.tab.sr_body.winfo_manager())
+        self.assertFalse(self.tab.fg_body.winfo_manager())
+        self.tab._choose_goal(GOALS[1])
+        self.assertTrue(self.tab.upscaler_var.get())
+        self.assertFalse(self.tab.frame_gen_var.get())
+        self.assertTrue(self.tab.sr_body.winfo_manager())
+        self.tab.apply_injection();self.pump();self.confirm_preview();self.pump();self.wait_for_scan()
+        self.assertEqual(self.tab.confirm_route_btn.cget('state'),'normal')
+        self.tab.sharpness_slider.set(.8);self.tab._on_pipeline_param_changed()
+        self.assertEqual(self.tab.confirm_route_btn.cget('state'),'disabled')
+
+    def test_preview_uses_file_table_and_fits_scaled_screen(self):
+        from gui.install_preview import show_preview
+        from core.install_plan import build_plan
+        from core.detector import GameDetector
+        from tkinter import ttk
+        self.tab.upscaler_var.set(True)
+        plan=build_plan(GameDetector.analyze_game(self.profile['target_exe']),self.tab._settings(),self.tab.injector.version_manager)
+        self.app._apply_scale('200%')
+        dialog=show_preview(self.tab,plan,False,lambda:None)
+        self.app.update()
+        def descendants(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from descendants(child)
+        table=next(w for w in descendants(dialog) if isinstance(w,ttk.Treeview))
+        self.assertEqual(len(table.get_children()),len(plan['file_actions']))
+        self.assertLessEqual(dialog.winfo_height(),dialog.winfo_screenheight())
+        dialog.destroy()
 
     def test_launch_uses_full_desktop_layout_without_manual_resize(self):
         # Do not set geometry: this must exercise MainWindow's actual launch size.

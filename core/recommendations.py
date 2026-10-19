@@ -10,6 +10,14 @@ def recommend(analysis, current, version_manager, hardware=None):
     values.update(optiscaler_version=current.get('optiscaler_version',''), xess_quality='Quality',
                   upscaler_enabled=bool((caps['dlss'] or caps['fsr']) and not caps['xess']),
                   frame_gen_enabled=bool((caps['dlssg'] or caps['fsrfg']) and not caps['xefg'] and analysis.get('graphics_api')=='DX12'))
+    from core.native_runtimes import BUNDLED
+    if current.get('runtime_method', BUNDLED) != BUNDLED:
+        # A suggestion may tune quality, but must not replace an explicit route.
+        for key in ('runtime_method', 'native_xess_path', 'native_xefg_path', 'native_xell_path',
+                    'upscaler_enabled', 'frame_gen_enabled', 'starting_upscaler', 'fg_input',
+                    'installation_mode', 'hook_method'):
+            if key in current:
+                values[key] = current[key]
     plan=build_plan(analysis,dict(values,hardware=hardware or {}),version_manager)
     notes=[]
     if caps['xess']:notes.append('XeSS runtime evidence is present. Check the native game setting first.')

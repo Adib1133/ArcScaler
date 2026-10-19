@@ -48,6 +48,33 @@ class RecoveryRobustness(unittest.TestCase):
         self.assertEqual(installation_health(self.folder,[str(second)])['state'],'incomplete')
         self.assertTrue(self.injector.revert_injection(str(self.folder),additional_dirs=[str(second)])['success'])
 
+    def test_force_preserves_changed_files_and_restores_native_originals(self):
+        native = self.folder / 'libxess.dll'
+        original = pe_bytes(marker=b'native XeSS')
+        native.write_bytes(original)
+        self.assertTrue(self.install(force=True)['success'])
+        changed = self.folder / 'OptiScaler.ini'
+        changed.write_bytes(b'user configuration changes')
+        native.write_bytes(pe_bytes(marker=b'external update'))
+        expected = {str(changed): changed.read_bytes(), str(native): native.read_bytes()}
+        result = self.install(force=True)
+        self.assertTrue(result['success'], result)
+        manifest = SafetyManager.load_manifest(self.folder)
+        copies = manifest['preserved_files']
+        self.assertEqual({p['original']: Path(p['copy']).read_bytes() for p in copies}, expected)
+        self.assertTrue(self.injector.revert_injection(str(self.folder))['success'])
+        self.assertEqual(native.read_bytes(), original)
+        self.assertFalse(changed.exists())
+        self.assertTrue(all(Path(p['copy']).exists() for p in copies))
+
+    def test_force_preview_keeps_selected_input_and_hook(self):
+        from core.install_plan import build_plan
+        analysis = GameDetector.analyze_game(str(self.exe))
+        plan = build_plan(analysis, {'force': True, 'upscaler_enabled': True,
+            'starting_upscaler': 'XeSS', 'hook_method': 'winmm.dll'}, self.injector.version_manager)
+        self.assertEqual(plan['settings']['starting_upscaler'], 'XeSS')
+        self.assertIn('winmm.dll', plan['files'])
+
     def test_combined_mode_is_recorded_everywhere(self):
         self.assertTrue(self.install(frame_gen_enabled=True,fg_input='dlssg')['success'])
         manifest=SafetyManager.load_manifest(self.folder)

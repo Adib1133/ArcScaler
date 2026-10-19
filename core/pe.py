@@ -36,6 +36,26 @@ def inspect_pe(path):
                 if start <= rva < start + length:
                     return raw + rva - start
             raise ValueError('Import address is not file-backed.')
+        exports = set()
+        if len(optional) >= directory + 8:
+            export_rva, export_size = struct.unpack_from('<II', optional, directory)
+            if export_rva:
+                table = read(offset(export_rva), 40)
+                function_count, name_count, functions_rva, names_rva, ordinals_rva = struct.unpack_from('<IIIII', table, 20)
+                if name_count > 65536 or function_count > 65536:
+                    raise ValueError('Export table is too large.')
+                for i in range(name_count):
+                    name_rva = struct.unpack('<I', read(offset(names_rva + i * 4), 4))[0]
+                    ordinal = struct.unpack('<H', read(offset(ordinals_rva + i * 2), 2))[0]
+                    if ordinal >= function_count:
+                        raise ValueError('Invalid export ordinal.')
+                    function_rva = struct.unpack('<I', read(offset(functions_rva + ordinal * 4), 4))[0]
+                    if not function_rva:
+                        continue
+                    offset(function_rva)
+                    pos = offset(name_rva)
+                    name = read(pos, min(512, size-pos)).split(b'\0', 1)[0]
+                    exports.add(name.decode('ascii', errors='strict'))
         imports = set()
         for index, stride, name_at in ((1, 20, 12), (13, 32, 4)):
             if len(optional) < directory + index * 8 + 8:
@@ -56,5 +76,5 @@ def inspect_pe(path):
                 imports.add(raw_name.decode('ascii', errors='strict').lower())
     apis = [api for dll,api in (('d3d11.dll','DX11'),('d3d12.dll','DX12'),('vulkan-1.dll','Vulkan')) if dll in imports]
     return {'architecture': {0x8664:'x64',0x14c:'x86',0xaa64:'ARM64'}.get(machine,'Unknown'),
-            'imports': sorted(imports), 'graphics_apis': apis,
+            'imports': sorted(imports), 'exports': sorted(exports), 'graphics_apis': apis,
             'graphics_api': apis[0] if len(apis)==1 else 'Unknown' if not apis else 'Multiple'}

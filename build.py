@@ -13,16 +13,22 @@ def build():
     from core.version_manager import VersionManager
     from core.files import sha256
     VersionManager(root/'assets/versions').resolve_package('v0.9.4')
+    from core.bundle import pack
+    bundle=root/'build/offline-runtime.zip'
+    bundle.parent.mkdir(exist_ok=True)
+    pack(root/'assets/versions/v0.9.4',bundle)
     command=[sys.executable,'-m','PyInstaller','--noconfirm','--clean','--onefile','--windowed',
              '--specpath',str(root/'build'),
              '--name','ArcScaler','--icon',str(root/'assets/arcscaler.ico'),
              '--version-file',str(root/'assets/windows-version.txt'),
-             '--add-data',f'{Path(customtkinter.__file__).parent};customtkinter',
+             '--add-data',f'{Path(customtkinter.__file__).parent/"assets"};customtkinter/assets',
              '--add-data',f'{root/"assets/arcscaler.ico"};assets',
              '--add-data',f'{root/"assets/arcscaler-icon.png"};assets',
              '--add-data',f'{root/"assets/compatibility.json"};assets',
-             '--add-data',f'{root/"assets/versions/v0.9.4"};assets/versions/v0.9.4',
-             '--collect-all','py7zr','--hidden-import','psutil','--hidden-import','PIL','--hidden-import','tkinter',str(root/'main.py')]
+             '--add-data',f'{bundle};assets',
+             '--exclude-module','numpy','--exclude-module','py7zr',
+             '--exclude-module','PIL.AvifImagePlugin','--exclude-module','PIL._avif',
+             '--hidden-import','psutil','--hidden-import','PIL','--hidden-import','tkinter',str(root/'main.py')]
     (root/'audit').mkdir(exist_ok=True)
     with (root/'audit/arcscaler-build-log.txt').open('w',encoding='utf-8') as log:
         subprocess.run(command,cwd=root,check=True,stdout=log,stderr=subprocess.STDOUT)
