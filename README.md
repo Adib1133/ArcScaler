@@ -108,10 +108,3 @@ repository directory. Never commit the downloaded binaries or personal profiles.
 
 Run `graphify update .` locally to regenerate the code knowledge graph.
 
-## Website and uploading
-
-The `website/` folder contains the static ArcScaler showcase with the app icon and actual UI captures. See `website/README.md` for local preview and the manual GitHub Pages workflow.
-
-Upload the **contents** of this source folder as the repository root. Keep source, tests, build scripts, license notices, artwork, the INI test fixture and the website. Attach generated EXE installers to GitHub Releases separately. No runtime DLLs, build outputs, personal profiles, cached releases or local audit reports belong in source control.
-
-Test prerequisites: the optional 7z extraction test needs `py7zr`; the real-runtime export test needs the complete local v0.9.4 package (excluded from Git). GUI integration tests require a working Windows Tk environment. For isolated checks, set `ARCSCALER_DATA_DIR` to a disposable writable directory and use `python -X utf8 audit/run_checks.py`.
